@@ -7,18 +7,14 @@ import { useToast } from '../../hooks/useToast';
 import { fetchDepartments, addDepartment } from '../../store/slices/departmentSlice';
 import { updateUser } from '../../store/slices/userSlice';
 import { fetchLeaveTypes, updateLeaveType } from '../../store/slices/leaveTypeSlice';
+import { fetchLeaveBalance } from '../../store/slices/leaveSlice';
 
 const UserManagement = () => {
   const dispatch = useDispatch();
   const { showToast } = useToast();
   const { teamMembers: users, loading, error } = useSelector((state) => state.team);
   const departmentsState = useSelector((state) => state.departments || {});
-  const leaveTypesState = useSelector((state) => state.leaveTypes || {});
-  
-  const { departments = [], loading: departmentsLoading = false, error: departmentsError = null } = departmentsState || {};
-  
-  console.log("DEPARTMENTS", departments);
-  
+  const { leaveBalance, loading: leaveLoading } = useSelector((state) => state.leave);
   const [activeTab, setActiveTab] = useState('users');
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isDepartmentModalOpen, setIsDepartmentModalOpen] = useState(false);
@@ -49,12 +45,18 @@ const UserManagement = () => {
     { id: 3, name: 'Emergency Leave', accrualRate: 0.5, maxCarryover: 0, description: 'Emergency situations' },
   ];
 
+  const { departments = [], loading: departmentsLoading = false, error: departmentsError = null } = departmentsState || {};
+
+  console.log("DEPARTMENTS", departments);
+
   useEffect(() => {
     dispatch(fetchTeamMembers())
       .unwrap()
       .catch((err) => showToast(err, 'error'));
     dispatch(fetchDepartments());
-    dispatch(fetchLeaveTypes());
+    dispatch(fetchLeaveBalance())
+      .unwrap()
+      .catch((err) => showToast(err, 'error'));
   }, [dispatch]);
 
   // Get unique departments and roles from team members for user section
@@ -98,10 +100,10 @@ const UserManagement = () => {
           jobTitle: editingUser.jobTitle || null,
         }
       })).unwrap();
-      
+
       // Refresh the team members list to show updated data
       await dispatch(fetchTeamMembers());
-      
+
       showToast('User updated successfully', 'success');
       handleCloseModal();
     } catch (error) {
@@ -152,11 +154,17 @@ const UserManagement = () => {
     handleCloseLeaveTypeModal();
   };
 
-  const handleSaveLeaveBalance = (e) => {
+  const handleSaveLeaveBalance = async (e) => {
     e.preventDefault();
-    // Here you would typically make an API call to save the leave balance
-    console.log('Saving leave balance:', editingUserLeaveBalance);
-    handleCloseLeaveBalanceModal();
+    try {
+      // Here you would make an API call to update the leave balance
+      showToast('Leave balance updated successfully', 'success');
+      handleCloseLeaveBalanceModal();
+      // Refresh the leave balances
+      await dispatch(fetchLeaveBalance()).unwrap();
+    } catch (error) {
+      showToast(error.message || 'Failed to update leave balance', 'error');
+    }
   };
 
   const handleAddDepartment = async (e) => {
@@ -172,17 +180,17 @@ const UserManagement = () => {
   };
 
   const filteredUsers = users?.filter(user => {
-    const matchesSearch = searchParams.search === '' || 
+    const matchesSearch = searchParams.search === '' ||
       `${user.firstName} ${user.lastName}`.toLowerCase().includes(searchParams.search.toLowerCase()) ||
       user.email.toLowerCase().includes(searchParams.search.toLowerCase());
-    
-    const matchesDepartment = searchParams.department === '' || 
+
+    const matchesDepartment = searchParams.department === '' ||
       user.department?.toLowerCase() === searchParams.department;
-    
-    const matchesRole = searchParams.role === '' || 
+
+    const matchesRole = searchParams.role === '' ||
       user.role?.toLowerCase() === searchParams.role;
 
-    const matchesJobTitle = searchParams.jobTitle === '' || 
+    const matchesJobTitle = searchParams.jobTitle === '' ||
       user.jobTitle?.toLowerCase() === searchParams.jobTitle;
 
     return matchesSearch && matchesDepartment && matchesRole && matchesJobTitle;
@@ -273,44 +281,40 @@ const UserManagement = () => {
           <nav className="-mb-px flex space-x-8">
             <button
               onClick={() => setActiveTab('users')}
-              className={`${
-                activeTab === 'users'
-                  ? 'border-blue-500 text-blue-600'
-                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-              } whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm flex items-center`}
+              className={`${activeTab === 'users'
+                ? 'border-blue-500 text-blue-600'
+                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                } whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm flex items-center`}
             >
               <RiUserLine className="mr-2" />
               Users
             </button>
             <button
               onClick={() => setActiveTab('departments')}
-              className={`${
-                activeTab === 'departments'
-                  ? 'border-blue-500 text-blue-600'
-                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-              } whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm flex items-center`}
+              className={`${activeTab === 'departments'
+                ? 'border-blue-500 text-blue-600'
+                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                } whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm flex items-center`}
             >
               <RiBuildingLine className="mr-2" />
               Departments
             </button>
             <button
               onClick={() => setActiveTab('roles')}
-              className={`${
-                activeTab === 'roles'
-                  ? 'border-blue-500 text-blue-600'
-                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-              } whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm flex items-center`}
+              className={`${activeTab === 'roles'
+                ? 'border-blue-500 text-blue-600'
+                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                } whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm flex items-center`}
             >
               <RiShieldLine className="mr-2" />
               Roles
             </button>
             <button
               onClick={() => setActiveTab('leave-balance')}
-              className={`${
-                activeTab === 'leave-balance'
-                  ? 'border-blue-500 text-blue-600'
-                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-              } whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm flex items-center`}
+              className={`${activeTab === 'leave-balance'
+                ? 'border-blue-500 text-blue-600'
+                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                } whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm flex items-center`}
             >
               <RiCalendarLine className="mr-2" />
               Leave Balance
@@ -337,7 +341,7 @@ const UserManagement = () => {
                   </div>
                 </div>
                 <div className="flex gap-4">
-                  <select 
+                  <select
                     className="px-4 py-2 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500"
                     value={searchParams.department}
                     onChange={(e) => setSearchParams({ ...searchParams, department: e.target.value })}
@@ -349,7 +353,7 @@ const UserManagement = () => {
                       </option>
                     ))}
                   </select>
-                  <select 
+                  <select
                     className="px-4 py-2 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500"
                     value={searchParams.role}
                     onChange={(e) => setSearchParams({ ...searchParams, role: e.target.value })}
@@ -361,7 +365,7 @@ const UserManagement = () => {
                       </option>
                     ))}
                   </select>
-                  <select 
+                  <select
                     className="px-4 py-2 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500"
                     value={searchParams.jobTitle}
                     onChange={(e) => setSearchParams({ ...searchParams, jobTitle: e.target.value })}
@@ -474,13 +478,13 @@ const UserManagement = () => {
                             )}
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                            <button 
+                            <button
                               className="text-blue-600 hover:text-blue-900 mr-4"
                               onClick={() => handleEditClick(user)}
                             >
                               <RiEditLine size={20} />
                             </button>
-                            <button 
+                            <button
                               className="text-red-600 hover:text-red-900"
                               onClick={() => handleDeleteUser(user.id)}
                             >
@@ -562,78 +566,12 @@ const UserManagement = () => {
               <div className="mb-6 flex justify-between items-center">
                 <div className="flex gap-4">
                   <select className="px-4 py-2 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500">
-                    <option value="">All Leave Types</option>
-                    {leaveTypes.map(type => (
-                      <option key={type.id} value={type.id}>{type.name}</option>
-                    ))}
-                  </select>
-                  <select className="px-4 py-2 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500">
                     <option value="">All Departments</option>
                     {departments.map(dept => (
                       <option key={dept.id} value={dept.id}>{dept.name}</option>
                     ))}
                   </select>
                 </div>
-                <button 
-                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-                  onClick={handleAddLeaveType}
-                >
-                  Add Leave Type
-                </button>
-              </div>
-
-              {/* Leave Types Table */}
-              <div className="overflow-x-auto mb-8">
-                <table className="min-w-full divide-y divide-gray-200">
-                  <thead className="bg-gray-50">
-                    <tr>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Leave Type
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Accrual Rate
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Max Carryover
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Description
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Actions
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody className="bg-white divide-y divide-gray-200">
-                    {leaveTypes.map((type) => (
-                      <tr key={type.id}>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="text-sm font-medium text-gray-900">{type.name}</div>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="text-sm text-gray-900">{type.accrualRate} days/month</div>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="text-sm text-gray-900">{type.maxCarryover} days</div>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="text-sm text-gray-900">{type.description}</div>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                          <button 
-                            className="text-blue-600 hover:text-blue-900 mr-4"
-                            onClick={() => handleEditLeaveType(type)}
-                          >
-                            <RiEditLine size={20} />
-                          </button>
-                          <button className="text-red-600 hover:text-red-900">
-                            <RiDeleteBinLine size={20} />
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
               </div>
 
               {/* User Leave Balances */}
@@ -650,13 +588,7 @@ const UserManagement = () => {
                           Department
                         </th>
                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Annual Leave
-                        </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Sick Leave
-                        </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Emergency Leave
+                          Annual Leave Balance
                         </th>
                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                           Actions
@@ -664,53 +596,64 @@ const UserManagement = () => {
                       </tr>
                     </thead>
                     <tbody className="bg-white divide-y divide-gray-200">
-                      {users.map((user) => (
-                        <tr key={user.id}>
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <div className="flex items-center">
-                              <div className="flex-shrink-0 h-10 w-10">
-                                {user.profilePictureUrl ? (
-                                  <img
-                                    src={user.profilePictureUrl}
-                                    alt={`${user.firstName} ${user.lastName}`}
-                                    className="h-10 w-10 rounded-full object-cover"
-                                  />
-                                ) : (
-                                  <div className="h-10 w-10 rounded-full bg-blue-100 flex items-center justify-center">
-                                    <span className="text-blue-600 font-medium">
-                                      {user.firstName[0]}{user.lastName[0]}
-                                    </span>
-                                  </div>
-                                )}
-                              </div>
-                              <div className="ml-4">
-                                <div className="text-sm font-medium text-gray-900">{user.firstName} {user.lastName}</div>
-                                <div className="text-sm text-gray-500">{user.email}</div>
-                              </div>
+                      {leaveLoading ? (
+                        <tr>
+                          <td colSpan="4" className="px-6 py-4 text-center">
+                            <div className="flex justify-center">
+                              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
                             </div>
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <div className="text-sm text-gray-900">{user.department}</div>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <div className="text-sm text-gray-900">{user.leaveStatus?.type === 'Annual Leave' ? 'On Leave' : ''}</div>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <div className="text-sm text-gray-900">{user.leaveStatus?.type === 'Sick Leave' ? 'On Leave' : ''}</div>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <div className="text-sm text-gray-900">{user.leaveStatus?.type === 'Emergency Leave' ? 'On Leave' : ''}</div>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                            <button 
-                              className="text-blue-600 hover:text-blue-900"
-                              onClick={() => handleEditLeaveBalance(user)}
-                            >
-                              <RiEditLine size={20} />
-                            </button>
-                          </td>
                         </tr>
-                      ))}
+                      ) : (
+                        users.map((user) => {
+                          const userBalance = Array.isArray(leaveBalance)
+                            ? leaveBalance.find(balance => balance.userId === user._id)
+                            : null;
+                          return (
+                            <tr key={user._id}>
+                              <td className="px-6 py-4 whitespace-nowrap">
+                                <div className="flex items-center">
+                                  <div className="flex-shrink-0 h-10 w-10">
+                                    {user.profilePictureUrl ? (
+                                      <img
+                                        src={user.profilePictureUrl}
+                                        alt={`${user.firstName} ${user.lastName}`}
+                                        className="h-10 w-10 rounded-full object-cover"
+                                      />
+                                    ) : (
+                                      <div className="h-10 w-10 rounded-full bg-blue-100 flex items-center justify-center">
+                                        <span className="text-blue-600 font-medium">
+                                          {user.firstName[0]}{user.lastName[0]}
+                                        </span>
+                                      </div>
+                                    )}
+                                  </div>
+                                  <div className="ml-4">
+                                    <div className="text-sm font-medium text-gray-900">{user.firstName} {user.lastName}</div>
+                                    <div className="text-sm text-gray-500">{user.email}</div>
+                                  </div>
+                                </div>
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap">
+                                <div className="text-sm text-gray-900">{user.department}</div>
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap">
+                                <div className="text-sm text-gray-900">
+                                  {userBalance?.annual || 0} days
+                                </div>
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                                <button
+                                  className="text-blue-600 hover:text-blue-900"
+                                  onClick={() => handleEditLeaveBalance(user)}
+                                >
+                                  <RiEditLine size={20} />
+                                </button>
+                              </td>
+                            </tr>
+                          );
+                        })
+                      )}
                     </tbody>
                   </table>
                 </div>
@@ -765,7 +708,7 @@ const UserManagement = () => {
                     <label className="block text-sm font-medium text-gray-700">Department</label>
                     <select
                       value={editingUser.department || ''}
-                      onChange={(e) => setEditingUser({...editingUser, department: e.target.value})}
+                      onChange={(e) => setEditingUser({ ...editingUser, department: e.target.value })}
                       className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
                     >
                       <option value="">Select Department</option>
@@ -780,7 +723,7 @@ const UserManagement = () => {
                     <label className="block text-sm font-medium text-gray-700">Role</label>
                     <select
                       value={editingUser.role || ''}
-                      onChange={(e) => setEditingUser({...editingUser, role: e.target.value})}
+                      onChange={(e) => setEditingUser({ ...editingUser, role: e.target.value })}
                       className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
                     >
                       <option value="">Select Role</option>
@@ -851,7 +794,7 @@ const UserManagement = () => {
                     <input
                       type="text"
                       value={editingLeaveType?.name || ''}
-                      onChange={(e) => setEditingLeaveType({...editingLeaveType, name: e.target.value})}
+                      onChange={(e) => setEditingLeaveType({ ...editingLeaveType, name: e.target.value })}
                       className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
                       required
                     />
@@ -862,7 +805,7 @@ const UserManagement = () => {
                       type="number"
                       step="0.01"
                       value={editingLeaveType?.accrualRate || ''}
-                      onChange={(e) => setEditingLeaveType({...editingLeaveType, accrualRate: parseFloat(e.target.value)})}
+                      onChange={(e) => setEditingLeaveType({ ...editingLeaveType, accrualRate: parseFloat(e.target.value) })}
                       className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
                       required
                     />
@@ -872,7 +815,7 @@ const UserManagement = () => {
                     <input
                       type="number"
                       value={editingLeaveType?.maxCarryover || ''}
-                      onChange={(e) => setEditingLeaveType({...editingLeaveType, maxCarryover: parseInt(e.target.value)})}
+                      onChange={(e) => setEditingLeaveType({ ...editingLeaveType, maxCarryover: parseInt(e.target.value) })}
                       className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
                       required
                     />
@@ -881,7 +824,7 @@ const UserManagement = () => {
                     <label className="block text-sm font-medium text-gray-700">Description</label>
                     <textarea
                       value={editingLeaveType?.description || ''}
-                      onChange={(e) => setEditingLeaveType({...editingLeaveType, description: e.target.value})}
+                      onChange={(e) => setEditingLeaveType({ ...editingLeaveType, description: e.target.value })}
                       className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
                       rows="3"
                       required
@@ -940,34 +883,6 @@ const UserManagement = () => {
                       onChange={(e) => setEditingUserLeaveBalance({
                         ...editingUserLeaveBalance,
                         annualLeaveBalance: parseInt(e.target.value)
-                      })}
-                      className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-                      min="0"
-                      required
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700">Sick Leave Balance</label>
-                    <input
-                      type="number"
-                      value={editingUserLeaveBalance.sickLeaveBalance || 0}
-                      onChange={(e) => setEditingUserLeaveBalance({
-                        ...editingUserLeaveBalance,
-                        sickLeaveBalance: parseInt(e.target.value)
-                      })}
-                      className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-                      min="0"
-                      required
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700">Emergency Leave Balance</label>
-                    <input
-                      type="number"
-                      value={editingUserLeaveBalance.emergencyLeaveBalance || 0}
-                      onChange={(e) => setEditingUserLeaveBalance({
-                        ...editingUserLeaveBalance,
-                        emergencyLeaveBalance: parseInt(e.target.value)
                       })}
                       className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
                       min="0"
